@@ -109,49 +109,48 @@ end Append
 /-- `C` can be folded over, with element type `τ` -/
 class Fold (C : Type u) (τ : outParam (Type v)) where
   /-- full (not early-terminating) fold over the elements of `C` -/
-  fold : {β : Type w} → (cont : C) → (β → τ → β) → β → β
+  fold : {β : Type w} → (cont : C) → (init : β) → (β → τ → β) → β
   /-- monadic fold over the elements of `C` -/
   foldM : {β : Type w} → {m : Type w → Type w} → [Monad m] →
-      (cont : C) → (β → τ → m β) → β → m β
-    := fun c f i => fold c (fun macc x => macc >>= fun acc => f acc x) (pure i)
+      (cont : C) → β → (β → τ → m β) → m β
+    := fun c i f => fold c (pure i) (fun macc x => macc >>= fun acc => f acc x)
 export Fold (fold foldM)
 
 namespace Fold
 
 instance [Fold C τ] : ForIn m C τ where
   forIn := fun {β} _ c acc f => do
-    let res ← Fold.foldM (m := ExceptT β m)
-      c (fun x acc =>
+    let res ← Fold.foldM (m := ExceptT β m) c acc (fun x acc =>
         f acc x >>= fun
           | .done a => throw a
-          | .yield a => pure a) acc
+          | .yield a => pure a)
     match res with
     | .ok a => pure a
     | .error a => pure a
 
 def find (f : τ → Bool) [Fold C τ] (cont : C) : Option τ :=
   match
-    Fold.foldM cont (fun () x =>
+    Fold.foldM cont () (fun () x =>
       if f x then .error x else .ok ()
-    ) ()
+    )
   with
   | Except.ok () => none
   | Except.error x => some x
 
 def any (f : τ → Bool) [Fold C τ] (cont : C) : Bool :=
   match
-    Fold.foldM cont (fun () x =>
+    Fold.foldM cont () (fun () x =>
       if f x then .error () else .ok ()
-    ) ()
+    )
   with
   | Except.ok () => false
   | Except.error () => true
 
 def all (f : τ → Bool) [Fold C τ] (cont : C) : Bool :=
   match
-    Fold.foldM cont (fun () x =>
+    Fold.foldM cont () (fun () x =>
       if f x then .ok () else .error ()
-    ) ()
+    )
   with
   | Except.ok () => true
   | Except.error () => false
@@ -237,4 +236,4 @@ class Size (C : Type u) where
 export Size (size)
 
 instance (priority := low) Size.ofFold [Fold C τ] : Size C where
-  size c := Fold.fold c (fun acc _x => acc+1) 0
+  size c := Fold.fold c 0 (fun acc _x => acc+1)

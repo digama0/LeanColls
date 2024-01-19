@@ -64,7 +64,7 @@ open LeanColls
   empty := []
   insert L x := x::L
   size := List.length
-  fold L f init := List.foldl f init L
+  fold L init f := List.foldl f init L
   ofFn := List.ofFn
   get := List.get
   set L i x := List.set L i x
